@@ -1,0 +1,7 @@
+all:
+  hosts:
+    remote-server:
+      ansible_host: 138.68.150.24
+      ansible_user: root
+      ansible_ssh_private_key_file: /path/to/your/private/key.pem
+

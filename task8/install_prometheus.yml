@@ -1,0 +1,102 @@
+---
+- name: Install Prometheus
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Ensure necessary dependencies are installed
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - wget
+        - unzip
+
+    - name: Download Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v2.30.3/prometheus-2.30.3.linux-amd64.tar.gz"
+        dest: "/tmp/prometheus.tar.gz"
+
+    - name: Extract Prometheus archive
+      ansible.builtin.unarchive:
+        src: "/tmp/prometheus.tar.gz"
+        dest: "/opt/"
+        remote_src: yes
+        creates: "/opt/prometheus-2.30.3.linux-amd64/"
+
+
+    - name: Create /opt/prometheus directory
+      file:
+        path: /opt/prometheus
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+
+    - name: Check if /path/to/source exists
+      stat:
+        path: /path/to/source
+      register: source_file
+
+    - name: Create /opt/prometheus directory if it doesn't exist
+      file:
+        path: /opt/prometheus
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+      when: not source_file.stat.exists
+
+    - name: Create a symbolic link
+      file:
+        src: /path/to/source
+        dest: /opt/prometheus
+        state: link
+        force: yes
+      when: source_file.stat.exists
+
+    
+    
+
+    - name: Create Prometheus user
+      user:
+        name: prometheus
+        system: yes
+        shell: /bin/false
+
+    - name: Create Prometheus data directory
+      file:
+        path: "/var/lib/prometheus"
+        state: directory
+        owner: prometheus
+        group: prometheus
+
+    - name: Copy Prometheus configuration file
+      copy:
+        src: "/opt/prometheus/prometheus.yml"
+        dest: "/etc/prometheus/prometheus.yml"
+        owner: prometheus
+        group: prometheus
+        mode: 0644
+
+    - name: Set SELinux context for Prometheus data directory
+      ansible.builtin.sefcontext:
+        target: "/opt/prometheus/data(/.*)?"
+        setype: var_lib_t
+        state: present
+      when: ansible_selinux.status == 'enabled'
+
+
+    - name: Set SELinux context for Prometheus configuration file
+      ansible.builtin.sefcontext:
+        target: "/etc/prometheus/prometheus.yml"
+        setype: etc_t
+        state: present
+      when: ansible_selinux.enabled | default(false)
+
+
+    - name: Start Prometheus service
+      systemd:
+        name: prometheus
+        state: started
+        enabled: yes
